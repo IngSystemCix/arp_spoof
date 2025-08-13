@@ -61,9 +61,10 @@ def get_mac_linux(ip):
     arp_req = ARP(pdst=ip)
     broadcast = Ether(dst="ff:ff:ff:ff:ff:ff")
     arp_req_broadcast = broadcast / arp_req
-    answered = srp(arp_req_broadcast, timeout=2, verbose=False)[0]
-    if answered:
-        return answered[0][1].hwsrc
+    answered, unanswered = srp(arp_req_broadcast, timeout=2, verbose=False, iface=conf.iface)
+    for sent, received in answered:
+        if received and received.hwsrc:
+            return received.hwsrc
     return None
 
 def get_mac_windows(ip):
