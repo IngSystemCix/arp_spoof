@@ -167,17 +167,17 @@ hosts_listbox.pack(padx=5, pady=5, fill="y")
 
 # Botones y opciones
 btn_scan = tk.Button(right_frame, text="Escanear Red", command=cargar_hosts, bg="blue", fg="white")
-btn_scan.pack(pady=5, fill="x")
+btn_scan.pack(pady=5, padx=5, fill="x")
 
 var_cut_internet = tk.BooleanVar()
 chk_cut = tk.Checkbutton(right_frame, text="Cortar Internet", variable=var_cut_internet)
 chk_cut.pack(pady=5)
 
 btn_start = tk.Button(right_frame, text="Iniciar Ataque", command=start_attack, bg="green", fg="white")
-btn_start.pack(pady=5, fill="x")
+btn_start.pack(pady=5, padx=5, fill="x")
 
 btn_stop = tk.Button(right_frame, text="Detener Ataque", command=stop_attack_fn, bg="red", fg="white")
-btn_stop.pack(pady=5, fill="x")
+btn_stop.pack(pady=5, padx=5, fill="x")
 
 # Centrar ventana
 root.update_idletasks()
